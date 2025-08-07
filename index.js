@@ -1,91 +1,78 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const basicAuth = require('express-basic-auth');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const { sendStatusUpdateEmail } = require('./mailer'); // Importa a função de envio de email
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Configurações
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.set('view engine', 'ejs');
-
-// Banco de dados
-const db = new sqlite3.Database('./tickets.db');
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS tickets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT,
-    email TEXT,
-    assunto TEXT,
-    descricao TEXT,
-    prioridade TEXT,
-    status TEXT DEFAULT 'Novo',
-    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+// Configurar o SQLite
+const db = new sqlite3.Database('./chamados.db', (err) => {
+  if (err) {
+    return console.error(err.message);
+  }
+  console.log('Conectado ao banco de dados SQLite.');
 });
 
-// Página inicial - Formulário
+// Criar tabela de chamados, se não existir
+db.run(`
+  CREATE TABLE IF NOT EXISTS chamados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    description TEXT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+// Configurar EJS
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Configurar arquivos estáticos e body-parser
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Rota para o formulário
 app.get('/', (req, res) => {
   res.render('form');
 });
 
-// Enviar formulário
-app.post('/submit', (req, res) => {
-  const { nome, email, assunto, descricao, prioridade } = req.body;
-  db.run(`INSERT INTO tickets (nome, email, assunto, descricao, prioridade) VALUES (?, ?, ?, ?, ?)`,
-    [nome, email, assunto, descricao, prioridade],
-    err => {
-      if (err) return res.send('Erro ao enviar chamado');
-      res.send('<h2>Chamado enviado com sucesso!<br><a href="/">Voltar</a></h2>');
-    });
+// Rota para processar formulário
+app.post('/enviar', (req, res) => {
+  const { name, email, description } = req.body;
+  db.run(
+    `INSERT INTO chamados (name, email, description) VALUES (?, ?, ?)`,
+    [name, email, description],
+    (err) => {
+      if (err) {
+        console.error(err.message);
+        res.status(500).send('Erro ao salvar o chamado.');
+      } else {
+        res.redirect('/obrigado');
+      }
+    }
+  );
 });
 
-// Autenticação admin
-app.use('/admin', basicAuth({
-  users: { 'admin': 'senha123' },
-  challenge: true
-}));
+// Página de agradecimento
+app.get('/obrigado', (req, res) => {
+  res.send('<h2>Chamado enviado com sucesso!</h2><a href="/">Voltar</a>');
+});
 
-// Painel de chamados
+// Rota da página de admin com correção do erro
 app.get('/admin', (req, res) => {
-  db.all(`SELECT * FROM tickets ORDER BY criado_em DESC`, (err, rows) => {
-    if (err) return res.send('Erro ao carregar chamados');
-    res.render('admin', { tickets: rows });
-  });
-});
-
-// Atualizar status com envio de e-mail
-app.post('/admin/update/:id', (req, res) => {
-  const { status } = req.body;
-  const { id } = req.params;
-  db.run(`UPDATE tickets SET status = ? WHERE id = ?`, [status, id], function(err) {
+  db.all('SELECT * FROM chamados ORDER BY createdAt DESC', (err, rows) => {
     if (err) {
       console.error(err);
-      return res.send('Erro ao atualizar status');
+      res.status(500).send("Erro ao buscar chamados.");
+    } else {
+      res.render('admin', { chamados: rows });
     }
-
-    // Busca o email do ticket atualizado
-    db.get(`SELECT email FROM tickets WHERE id = ?`, [id], async (err, row) => {
-      if (err || !row) {
-        console.error(err);
-        return res.send('Erro ao buscar email do ticket');
-      }
-
-      try {
-        await sendStatusUpdateEmail(row.email, id, status);
-        res.redirect('/admin');
-      } catch (error) {
-        console.error('Erro ao enviar email:', error);
-        res.send('Erro ao enviar email de notificação');
-      }
-    });
   });
 });
 
+// Iniciar o servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
