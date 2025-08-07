@@ -2,6 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
 const nodemailer = require('./mailer');
 
 const app = express();
@@ -10,10 +12,15 @@ const PORT = process.env.PORT || 10000;
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
+app.use(session({
+  secret: 'umaChaveSecretaMuitoSegura',
+  resave: false,
+  saveUninitialized: false
+}));
 
 const chamadosFile = path.join(__dirname, 'chamados.json');
+const usuariosFile = path.join(__dirname, 'usuarios.json');
 
-// Função para formatar data no padrão brasileiro com hora e fuso de Brasília
 function formatarDataBR(data) {
   return data.toLocaleString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
@@ -26,43 +33,60 @@ function formatarDataBR(data) {
   });
 }
 
-// Carregar chamados existentes com tratamento de erro
 let chamados = [];
 if (fs.existsSync(chamadosFile)) {
   try {
-    const data = fs.readFileSync(chamadosFile, 'utf8');
-    chamados = data ? JSON.parse(data) : [];
-  } catch (err) {
-    console.error('Erro ao ler arquivo chamados.json:', err);
-    chamados = [];
-  }
+    chamados = JSON.parse(fs.readFileSync(chamadosFile, 'utf8') || '[]');
+  } catch { chamados = []; }
 }
 
-// Página inicial (formulário)
-app.get('/', (req, res) => {
-  res.render('form', { success: false });
+let usuarios = [];
+if (fs.existsSync(usuariosFile)) {
+  try {
+    usuarios = JSON.parse(fs.readFileSync(usuariosFile, 'utf8') || '[]');
+  } catch { usuarios = []; }
+}
+
+function requireAuth(req, res, next) {
+  if (req.session.usuario) next();
+  else res.redirect('/login');
+}
+
+// Login
+app.get('/login', (req, res) => res.render('login', { error: null }));
+app.post('/login', (req, res) => {
+  const { email, senha } = req.body;
+  const user = usuarios.find(u => u.email === email);
+  if (user && bcrypt.compareSync(senha, user.senha)) {
+    req.session.usuario = { email: user.email, nome: user.nome };
+    return res.redirect('/admin');
+  }
+  res.render('login', { error: 'Email ou senha inválidos.' });
 });
 
-// Página de sucesso
-app.get('/sucesso', (req, res) => {
-  res.render('sucesso');
+app.get('/logout', (req, res) => {
+  req.session.destroy(err => res.redirect('/login'));
 });
 
-// Página de administração
-app.get('/admin', (req, res) => {
-  res.render('admin', { chamados });
+// Cadastro (somente se já estiver logado como administrador)
+app.get('/cadastro-usuario', requireAuth, (req, res) => res.render('cadastro', { error: null }));
+app.post('/cadastro-usuario', requireAuth, (req, res) => {
+  const { nome, email, senha } = req.body;
+  if (usuarios.some(u => u.email === email)) return res.render('cadastro', { error: 'Email já cadastrado.' });
+  const senhaHash = bcrypt.hashSync(senha, 10);
+  usuarios.push({ nome, email, senha: senhaHash });
+  fs.writeFileSync(usuariosFile, JSON.stringify(usuarios, null, 2));
+  res.redirect('/admin');
 });
 
-// Criar novo chamado
-app.post('/criar-chamado', (req, res) => {
+// Formulário de Chamado
+app.get('/', (req, res) => res.render('form', { success: false }));
+app.post('/criar-chamado', requireAuth, (req, res) => {
   const { nome, email, assunto, subAssunto, descricao } = req.body;
-
   if (!nome || !email || !assunto || !subAssunto || !descricao) {
     return res.render('form', { success: false, erro: 'Todos os campos são obrigatórios.' });
   }
-
   const prioridade = definirPrioridade(assunto, subAssunto);
-
   const novoChamado = {
     id: chamados.length + 1,
     nome,
@@ -72,90 +96,46 @@ app.post('/criar-chamado', (req, res) => {
     descricao,
     prioridade,
     status: 'Aberto',
-    dataCriacao: formatarDataBR(new Date()), // Corrigido para horário de Brasília
+    usuario: req.session.usuario.email,
+    dataCriacao: formatarDataBR(new Date()),
     historico: []
   };
-
   chamados.push(novoChamado);
+  fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
 
-  try {
-    fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
-  } catch (err) {
-    console.error('Erro ao salvar arquivo chamados.json:', err);
-    return res.status(500).send('Erro interno ao salvar chamado.');
-  }
-
-  // Enviar e-mail de confirmação
-  const mailOptions = {
+  nodemailer.sendMail({
     from: 'fernando.sbiao@gmail.com',
     to: email,
     subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
-    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
-  };
-
-  nodemailer.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.error('Erro ao enviar e-mail:', error);
-    } else {
-      console.log('E-mail enviado:', info.response);
-    }
-  });
+    text: `Olá ${nome}, seu chamado foi criado com sucesso. Nº #${novoChamado.id}`
+  }, (err, info) => err ? console.error(err) : console.log('E-mail enviado:', info.response));
 
   res.redirect('/sucesso');
 });
 
-// Atualizar status de um chamado
-app.post('/atualizar-status', (req, res) => {
+// Admin e chamados do próprio usuário
+app.get('/admin', requireAuth, (req, res) => {
+  const meus = chamados.filter(c => c.usuario === req.session.usuario.email);
+  res.render('admin', { chamados: meus, usuario: req.session.usuario });
+});
+
+app.post('/atualizar-status', requireAuth, (req, res) => {
   const { id, status, descricaoAtualizacao } = req.body;
   const chamado = chamados.find(c => c.id === parseInt(id));
-  if (chamado) {
+  if (chamado && chamado.usuario === req.session.usuario.email) {
     chamado.status = status;
-    chamado.historico.push({
-      data: formatarDataBR(new Date()), // Corrigido para horário de Brasília
-      status,
-      descricao: descricaoAtualizacao?.trim() || ''
-    });
-
-    try {
-      fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
-    } catch (err) {
-      console.error('Erro ao salvar arquivo chamados.json:', err);
-      return res.status(500).send('Erro interno ao salvar atualização.');
-    }
-
-    nodemailer.sendStatusUpdateEmail(
-      chamado.email,
-      chamado.id,
-      status,
-      descricaoAtualizacao
-    )
-      .then(info => {
-        console.log('E-mail de atualização enviado:', info.response);
-      })
-      .catch(err => {
-        console.error('Erro ao enviar e-mail de atualização:', err);
-      });
+    chamado.historico.push({ data: formatarDataBR(new Date()), status, descricao: descricaoAtualizacao?.trim() || '' });
+    fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+    nodemailer.sendStatusUpdateEmail(chamado.email, chamado.id, status, descricaoAtualizacao)
+      .then(info => console.log('E-mail atualizado enviado:', info.response))
+      .catch(err => console.log(err));
   }
-
   res.redirect('/admin');
 });
 
-// Função para definir prioridade
 function definirPrioridade(assunto, subAssunto) {
-  const regras = {
-    'Pedidos': {
-      'Integração de Pedidos': 'Alta',
-      'Dúvidas / Auxílio': 'Baixa'
-    },
-    'Produto/Anúncio': {
-      'Vínculo de produto/anúncio com erro': 'Média',
-      'Dúvidas / Auxílio': 'Baixa'
-    }
-  };
-
+  const regras = { 'Pedidos': { 'Integração de Pedidos': 'Alta', 'Dúvidas / Auxílio': 'Baixa' }, 'Produto/Anúncio': { 'Vínculo de produto/anúncio com erro': 'Média', 'Dúvidas / Auxílio': 'Baixa' } };
   return (regras[assunto] && regras[assunto][subAssunto]) || 'Média';
 }
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Servidor rodando em http://localhost:${PORT}`));
