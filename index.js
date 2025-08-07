@@ -29,6 +29,11 @@ app.get('/admin', (req, res) => {
   res.render('admin', { chamados });
 });
 
+// Página de sucesso após criação de chamado
+app.get('/sucesso', (req, res) => {
+  res.render('sucesso');
+});
+
 // Criar novo chamado
 app.post('/criar-chamado', (req, res) => {
   const { nome, email, assunto, subAssunto, descricao } = req.body;
@@ -67,13 +72,8 @@ app.post('/criar-chamado', (req, res) => {
     }
   });
 
-  // Redirecionar para a página de sucesso
+  // Redirecionar para página de sucesso
   res.redirect('/sucesso');
-});
-
-// Página de sucesso
-app.get('/sucesso', (req, res) => {
-  res.render('sucesso');
 });
 
 // Atualizar status de um chamado
