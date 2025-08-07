@@ -4,10 +4,16 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'fernando.sbiao@gmail.com',
-    pass: 'zpfqalmwadbpihuh', // aqui vai a senha de app, sem espaços
+    pass: 'zpfqalmwadbpihuh', // senha de app, sem espaços
   },
 });
 
+// Função genérica para enviar e-mails, recebe as opções do mail
+function sendMail(mailOptions) {
+  return transporter.sendMail(mailOptions);
+}
+
+// Função específica para enviar e-mail de atualização de status (opcional)
 function sendStatusUpdateEmail(toEmail, ticketId, newStatus) {
   const mailOptions = {
     from: 'fernando.sbiao@gmail.com',
@@ -25,4 +31,4 @@ Obrigado!`,
   return transporter.sendMail(mailOptions);
 }
 
-module.exports = { sendStatusUpdateEmail };
+module.exports = { sendMail, sendStatusUpdateEmail };

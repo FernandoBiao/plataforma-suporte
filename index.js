@@ -2,7 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
-const nodemailer = require('./mailer');
+const { sendMail } = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -52,19 +52,30 @@ app.post('/criar-chamado', (req, res) => {
 
   // Enviar e-mail de confirmação
   const mailOptions = {
-    from: 'seu-email@dominio.com', // Trocar pelo seu e-mail real
+    from: 'fernando.sbiao@gmail.com', // seu e-mail real
     to: email,
     subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
-    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
+    text: `Olá ${nome},
+
+Seu chamado foi criado com sucesso.
+
+Número do Chamado: #${novoChamado.id}
+Assunto: ${assunto}
+Sub-Assunto: ${subAssunto}
+Prioridade: ${prioridade}
+
+Em breve entraremos em contato.
+
+Obrigado!`
   };
 
-  nodemailer.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.error('Erro ao enviar e-mail:', error);
-    } else {
+  sendMail(mailOptions)
+    .then(info => {
       console.log('E-mail enviado:', info.response);
-    }
-  });
+    })
+    .catch(error => {
+      console.error('Erro ao enviar e-mail:', error);
+    });
 
   res.redirect('/');
 });
