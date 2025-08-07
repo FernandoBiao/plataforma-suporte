@@ -12,15 +12,61 @@ const PORT = process.env.PORT || 10000;
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
+
 app.use(session({
-  secret: 'umaChaveSecretaMuitoSegura',
+  secret: 'segredo_supersecreto_123',
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: { maxAge: 3600000 } // 1 hora
 }));
 
-const chamadosFile = path.join(__dirname, 'chamados.json');
-const usuariosFile = path.join(__dirname, 'usuarios.json');
+const dbFile = path.join(__dirname, 'db.json');
 
+let db = { usuarios: [], chamados: [] };
+
+// Função para carregar dados do db.json
+function carregarDB() {
+  if (fs.existsSync(dbFile)) {
+    try {
+      const data = fs.readFileSync(dbFile, 'utf8');
+      db = data ? JSON.parse(data) : { usuarios: [], chamados: [] };
+    } catch (err) {
+      console.error('Erro ao ler arquivo db.json:', err);
+      db = { usuarios: [], chamados: [] };
+    }
+  }
+}
+
+// Função para salvar dados no db.json
+function salvarDB() {
+  try {
+    fs.writeFileSync(dbFile, JSON.stringify(db, null, 2));
+  } catch (err) {
+    console.error('Erro ao salvar arquivo db.json:', err);
+  }
+}
+
+carregarDB();
+
+// Middleware para verificar se está logado
+function verificarLogin(req, res, next) {
+  if (req.session.usuario) {
+    next();
+  } else {
+    res.redirect('/login');
+  }
+}
+
+// Middleware para verificar se é admin
+function verificarAdmin(req, res, next) {
+  if (req.session.usuario && req.session.usuario.admin) {
+    next();
+  } else {
+    res.status(403).send('Acesso negado');
+  }
+}
+
+// Função para formatar data no padrão brasileiro com hora de Brasília
 function formatarDataBR(data) {
   return data.toLocaleString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
@@ -33,62 +79,90 @@ function formatarDataBR(data) {
   });
 }
 
-let chamados = [];
-if (fs.existsSync(chamadosFile)) {
-  try {
-    chamados = JSON.parse(fs.readFileSync(chamadosFile, 'utf8') || '[]');
-  } catch { chamados = []; }
-}
+// Página de login
+app.get('/login', (req, res) => {
+  res.render('login', { erro: null });
+});
 
-let usuarios = [];
-if (fs.existsSync(usuariosFile)) {
-  try {
-    usuarios = JSON.parse(fs.readFileSync(usuariosFile, 'utf8') || '[]');
-  } catch { usuarios = []; }
-}
-
-function requireAuth(req, res, next) {
-  if (req.session.usuario) next();
-  else res.redirect('/login');
-}
-
-// Login
-app.get('/login', (req, res) => res.render('login', { error: null }));
+// Processar login
 app.post('/login', (req, res) => {
   const { email, senha } = req.body;
-  const user = usuarios.find(u => u.email === email);
-  if (user && bcrypt.compareSync(senha, user.senha)) {
-    req.session.usuario = { email: user.email, nome: user.nome };
-    return res.redirect('/admin');
+  const usuario = db.usuarios.find(u => u.email === email);
+
+  if (!usuario) {
+    return res.render('login', { erro: 'Usuário não encontrado' });
   }
-  res.render('login', { error: 'Email ou senha inválidos.' });
+
+  if (!bcrypt.compareSync(senha, usuario.senha)) {
+    return res.render('login', { erro: 'Senha incorreta' });
+  }
+
+  // Login bem sucedido
+  req.session.usuario = { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.admin };
+
+  // Redirecionar para admin se for admin, ou para meus chamados se usuário comum
+  if (usuario.admin) {
+    res.redirect('/admin');
+  } else {
+    res.redirect('/meus-chamados');
+  }
 });
 
+// Logout
 app.get('/logout', (req, res) => {
-  req.session.destroy(err => res.redirect('/login'));
+  req.session.destroy(() => {
+    res.redirect('/login');
+  });
 });
 
-// Cadastro (somente se já estiver logado como administrador)
-app.get('/cadastro-usuario', requireAuth, (req, res) => res.render('cadastro', { error: null }));
-app.post('/cadastro-usuario', requireAuth, (req, res) => {
-  const { nome, email, senha } = req.body;
-  if (usuarios.some(u => u.email === email)) return res.render('cadastro', { error: 'Email já cadastrado.' });
-  const senhaHash = bcrypt.hashSync(senha, 10);
-  usuarios.push({ nome, email, senha: senhaHash });
-  fs.writeFileSync(usuariosFile, JSON.stringify(usuarios, null, 2));
-  res.redirect('/admin');
+// Tela para cadastro de novos usuários (somente admin)
+app.get('/usuarios', verificarLogin, verificarAdmin, (req, res) => {
+  res.render('usuarios', { usuarios: db.usuarios, erro: null, sucesso: null });
 });
 
-// Formulário de Chamado
-app.get('/', (req, res) => res.render('form', { success: false }));
-app.post('/criar-chamado', requireAuth, (req, res) => {
-  const { nome, email, assunto, subAssunto, descricao } = req.body;
-  if (!nome || !email || !assunto || !subAssunto || !descricao) {
-    return res.render('form', { success: false, erro: 'Todos os campos são obrigatórios.' });
+// Processar cadastro de usuário novo (somente admin)
+app.post('/usuarios', verificarLogin, verificarAdmin, (req, res) => {
+  const { nome, email, senha, admin } = req.body;
+
+  if (!nome || !email || !senha) {
+    return res.render('usuarios', { usuarios: db.usuarios, erro: 'Todos os campos são obrigatórios.', sucesso: null });
   }
+
+  if (db.usuarios.find(u => u.email === email)) {
+    return res.render('usuarios', { usuarios: db.usuarios, erro: 'Email já cadastrado.', sucesso: null });
+  }
+
+  const novoUsuario = {
+    id: db.usuarios.length + 1,
+    nome,
+    email,
+    senha: bcrypt.hashSync(senha, 10),
+    admin: admin === 'on'
+  };
+
+  db.usuarios.push(novoUsuario);
+  salvarDB();
+
+  res.render('usuarios', { usuarios: db.usuarios, erro: null, sucesso: 'Usuário criado com sucesso.' });
+});
+
+// Página inicial (formulário abrir chamado) - requer login
+app.get('/', verificarLogin, (req, res) => {
+  res.render('form', { success: false, usuario: req.session.usuario });
+});
+
+// Criar novo chamado - requer login
+app.post('/criar-chamado', verificarLogin, (req, res) => {
+  const { nome, email, assunto, subAssunto, descricao } = req.body;
+
+  if (!nome || !email || !assunto || !subAssunto || !descricao) {
+    return res.render('form', { success: false, erro: 'Todos os campos são obrigatórios.', usuario: req.session.usuario });
+  }
+
   const prioridade = definirPrioridade(assunto, subAssunto);
+
   const novoChamado = {
-    id: chamados.length + 1,
+    id: db.chamados.length + 1,
     nome,
     email,
     assunto,
@@ -96,46 +170,96 @@ app.post('/criar-chamado', requireAuth, (req, res) => {
     descricao,
     prioridade,
     status: 'Aberto',
-    usuario: req.session.usuario.email,
     dataCriacao: formatarDataBR(new Date()),
-    historico: []
+    historico: [],
+    usuarioId: req.session.usuario.id
   };
-  chamados.push(novoChamado);
-  fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
 
-  nodemailer.sendMail({
+  db.chamados.push(novoChamado);
+  salvarDB();
+
+  // Enviar e-mail de confirmação
+  const mailOptions = {
     from: 'fernando.sbiao@gmail.com',
     to: email,
     subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
-    text: `Olá ${nome}, seu chamado foi criado com sucesso. Nº #${novoChamado.id}`
-  }, (err, info) => err ? console.error(err) : console.log('E-mail enviado:', info.response));
+    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
+  };
 
-  res.redirect('/sucesso');
+  nodemailer.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Erro ao enviar e-mail:', error);
+    } else {
+      console.log('E-mail enviado:', info.response);
+    }
+  });
+
+  res.render('form', { success: true, usuario: req.session.usuario });
 });
 
-// Admin e chamados do próprio usuário
-app.get('/admin', requireAuth, (req, res) => {
-  const meus = chamados.filter(c => c.usuario === req.session.usuario.email);
-  res.render('admin', { chamados: meus, usuario: req.session.usuario });
+// Página de sucesso (pode ser mantida, mas com login isso fica opcional)
+app.get('/sucesso', verificarLogin, (req, res) => {
+  res.render('sucesso');
 });
 
-app.post('/atualizar-status', requireAuth, (req, res) => {
+// Página de administração (admin) - lista todos os chamados
+app.get('/admin', verificarLogin, verificarAdmin, (req, res) => {
+  res.render('admin', { chamados: db.chamados, usuario: req.session.usuario });
+});
+
+// Atualizar status de um chamado - admin
+app.post('/atualizar-status', verificarLogin, verificarAdmin, (req, res) => {
   const { id, status, descricaoAtualizacao } = req.body;
-  const chamado = chamados.find(c => c.id === parseInt(id));
-  if (chamado && chamado.usuario === req.session.usuario.email) {
+  const chamado = db.chamados.find(c => c.id === parseInt(id));
+  if (chamado) {
     chamado.status = status;
-    chamado.historico.push({ data: formatarDataBR(new Date()), status, descricao: descricaoAtualizacao?.trim() || '' });
-    fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
-    nodemailer.sendStatusUpdateEmail(chamado.email, chamado.id, status, descricaoAtualizacao)
-      .then(info => console.log('E-mail atualizado enviado:', info.response))
-      .catch(err => console.log(err));
+    chamado.historico.push({
+      data: formatarDataBR(new Date()),
+      status,
+      descricao: descricaoAtualizacao?.trim() || ''
+    });
+
+    salvarDB();
+
+    nodemailer.sendStatusUpdateEmail(
+      chamado.email,
+      chamado.id,
+      status,
+      descricaoAtualizacao
+    )
+      .then(info => {
+        console.log('E-mail de atualização enviado:', info.response);
+      })
+      .catch(err => {
+        console.error('Erro ao enviar e-mail de atualização:', err);
+      });
   }
+
   res.redirect('/admin');
 });
 
+// Página para usuário comum ver seus próprios chamados
+app.get('/meus-chamados', verificarLogin, (req, res) => {
+  const meusChamados = db.chamados.filter(c => c.usuarioId === req.session.usuario.id);
+  res.render('meus-chamados', { chamados: meusChamados, usuario: req.session.usuario });
+});
+
+// Função para definir prioridade
 function definirPrioridade(assunto, subAssunto) {
-  const regras = { 'Pedidos': { 'Integração de Pedidos': 'Alta', 'Dúvidas / Auxílio': 'Baixa' }, 'Produto/Anúncio': { 'Vínculo de produto/anúncio com erro': 'Média', 'Dúvidas / Auxílio': 'Baixa' } };
+  const regras = {
+    'Pedidos': {
+      'Integração de Pedidos': 'Alta',
+      'Dúvidas / Auxílio': 'Baixa'
+    },
+    'Produto/Anúncio': {
+      'Vínculo de produto/anúncio com erro': 'Média',
+      'Dúvidas / Auxílio': 'Baixa'
+    }
+  };
+
   return (regras[assunto] && regras[assunto][subAssunto]) || 'Média';
 }
 
-app.listen(PORT, () => console.log(`Servidor rodando em http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
+});
