@@ -89,8 +89,8 @@ app.post('/criar-chamado', (req, res) => {
   const mailOptions = {
     from: 'fernando.sbiao@gmail.com',
     to: email,
-    subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
-    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
+    subject: Confirmação de Abertura de Chamado #${novoChamado.id},
+    text: Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!
   };
 
   nodemailer.sendMail(mailOptions, (error, info) => {
@@ -157,5 +157,5 @@ function definirPrioridade(assunto, subAssunto) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+  console.log(Servidor rodando em http://localhost:${PORT});
 });
