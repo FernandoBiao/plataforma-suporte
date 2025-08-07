@@ -19,24 +19,28 @@ if (fs.existsSync(chamadosFile)) {
   chamados = JSON.parse(fs.readFileSync(chamadosFile));
 }
 
-// Página inicial (abrir chamado)
+// Página inicial (formulário)
 app.get('/', (req, res) => {
   res.render('form', { success: false });
 });
 
-// Página do admin
-app.get('/admin', (req, res) => {
-  res.render('admin', { chamados });
-});
-
-// Página de sucesso após criação de chamado
+// Página de sucesso
 app.get('/sucesso', (req, res) => {
   res.render('sucesso');
+});
+
+// Página de administração
+app.get('/admin', (req, res) => {
+  res.render('admin', { chamados });
 });
 
 // Criar novo chamado
 app.post('/criar-chamado', (req, res) => {
   const { nome, email, assunto, subAssunto, descricao } = req.body;
+
+  if (!nome || !email || !assunto || !subAssunto || !descricao) {
+    return res.render('form', { success: false, erro: 'Todos os campos são obrigatórios.' });
+  }
 
   const prioridade = definirPrioridade(assunto, subAssunto);
 
@@ -58,7 +62,7 @@ app.post('/criar-chamado', (req, res) => {
 
   // Enviar e-mail de confirmação
   const mailOptions = {
-    from: 'seu-email@dominio.com', // Trocar pelo seu e-mail real
+    from: 'fernando.sbiao@gmail.com', // seu e-mail real
     to: email,
     subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
     text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
@@ -72,7 +76,6 @@ app.post('/criar-chamado', (req, res) => {
     }
   });
 
-  // Redirecionar para página de sucesso
   res.redirect('/sucesso');
 });
 
@@ -82,23 +85,20 @@ app.post('/atualizar-status', (req, res) => {
   const chamado = chamados.find(c => c.id === parseInt(id));
   if (chamado) {
     chamado.status = status;
-    if (descricaoAtualizacao && descricaoAtualizacao.trim() !== '') {
-      chamado.historico.push({
-        data: new Date().toLocaleString(),
-        status,
-        descricao: descricaoAtualizacao.trim()
-      });
-    } else {
-      chamado.historico.push({
-        data: new Date().toLocaleString(),
-        status,
-        descricao: ''
-      });
-    }
+    chamado.historico.push({
+      data: new Date().toLocaleString(),
+      status,
+      descricao: descricaoAtualizacao?.trim() || ''
+    });
+
     fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
 
-    // Enviar e-mail de atualização para o criador
-    nodemailer.sendStatusUpdateEmail(chamado.email, chamado.id, status, descricaoAtualizacao)
+    nodemailer.sendStatusUpdateEmail(
+      chamado.email,
+      chamado.id,
+      status,
+      descricaoAtualizacao
+    )
       .then(info => {
         console.log('E-mail de atualização enviado:', info.response);
       })
@@ -106,10 +106,11 @@ app.post('/atualizar-status', (req, res) => {
         console.error('Erro ao enviar e-mail de atualização:', err);
       });
   }
+
   res.redirect('/admin');
 });
 
-// Função para definir prioridade com base no assunto e sub-assunto
+// Função para definir prioridade
 function definirPrioridade(assunto, subAssunto) {
   const regras = {
     'Pedidos': {
