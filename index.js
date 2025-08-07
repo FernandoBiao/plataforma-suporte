@@ -13,10 +13,10 @@ app.use(express.static('public'));
 
 const chamadosFile = path.join(__dirname, 'chamados.json');
 
-// Função para formatar data no padrão brasileiro com hora no fuso de Brasília
+// Função para formatar data no padrão brasileiro com hora e fuso de Brasília
 function formatarDataBR(data) {
   return data.toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo', // corrigido para horário de Brasília
+    timeZone: 'America/Sao_Paulo',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -72,7 +72,7 @@ app.post('/criar-chamado', (req, res) => {
     descricao,
     prioridade,
     status: 'Aberto',
-    dataCriacao: formatarDataBR(new Date()),
+    dataCriacao: formatarDataBR(new Date()), // Corrigido para horário de Brasília
     historico: []
   };
 
@@ -89,8 +89,8 @@ app.post('/criar-chamado', (req, res) => {
   const mailOptions = {
     from: 'fernando.sbiao@gmail.com',
     to: email,
-    subject: Confirmação de Abertura de Chamado #${novoChamado.id},
-    text: Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!
+    subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
+    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
   };
 
   nodemailer.sendMail(mailOptions, (error, info) => {
@@ -111,7 +111,7 @@ app.post('/atualizar-status', (req, res) => {
   if (chamado) {
     chamado.status = status;
     chamado.historico.push({
-      data: formatarDataBR(new Date()),
+      data: formatarDataBR(new Date()), // Corrigido para horário de Brasília
       status,
       descricao: descricaoAtualizacao?.trim() || ''
     });
@@ -157,5 +157,5 @@ function definirPrioridade(assunto, subAssunto) {
 }
 
 app.listen(PORT, () => {
-  console.log(Servidor rodando em http://localhost:${PORT});
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
