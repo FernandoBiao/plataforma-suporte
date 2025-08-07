@@ -1,78 +1,101 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
 const path = require('path');
+const nodemailer = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Configurar o SQLite
-const db = new sqlite3.Database('./chamados.db', (err) => {
-  if (err) {
-    return console.error(err.message);
-  }
-  console.log('Conectado ao banco de dados SQLite.');
-});
-
-// Criar tabela de chamados, se não existir
-db.run(`
-  CREATE TABLE IF NOT EXISTS chamados (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    description TEXT NOT NULL,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-// Configurar EJS
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-
-// Configurar arquivos estáticos e body-parser
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.urlencoded({ extended: true }));
+app.set('view engine', 'ejs');
+app.use(express.static('public'));
 
-// Rota para o formulário
+const chamadosFile = path.join(__dirname, 'chamados.json');
+
+// Carregar chamados existentes
+let chamados = [];
+if (fs.existsSync(chamadosFile)) {
+  chamados = JSON.parse(fs.readFileSync(chamadosFile));
+}
+
+// Página inicial (abrir chamado)
 app.get('/', (req, res) => {
   res.render('form');
 });
 
-// Rota para processar formulário
-app.post('/enviar', (req, res) => {
-  const { name, email, description } = req.body;
-  db.run(
-    `INSERT INTO chamados (name, email, description) VALUES (?, ?, ?)`,
-    [name, email, description],
-    (err) => {
-      if (err) {
-        console.error(err.message);
-        res.status(500).send('Erro ao salvar o chamado.');
-      } else {
-        res.redirect('/obrigado');
-      }
-    }
-  );
-});
-
-// Página de agradecimento
-app.get('/obrigado', (req, res) => {
-  res.send('<h2>Chamado enviado com sucesso!</h2><a href="/">Voltar</a>');
-});
-
-// Rota da página de admin com correção do erro
+// Página do admin
 app.get('/admin', (req, res) => {
-  db.all('SELECT * FROM chamados ORDER BY createdAt DESC', (err, rows) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send("Erro ao buscar chamados.");
+  res.render('admin', { chamados });
+});
+
+// Criar novo chamado
+app.post('/criar-chamado', (req, res) => {
+  const { nome, email, assunto, subAssunto, descricao } = req.body;
+
+  const prioridade = definirPrioridade(assunto, subAssunto);
+
+  const novoChamado = {
+    id: chamados.length + 1,
+    nome,
+    email,
+    assunto,
+    subAssunto,
+    descricao,
+    prioridade,
+    status: 'Aberto',
+    dataCriacao: new Date().toLocaleString()
+  };
+
+  chamados.push(novoChamado);
+  fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+
+  // Enviar e-mail de confirmação
+  const mailOptions = {
+    from: 'seu-email@dominio.com', // Trocar pelo seu e-mail real
+    to: email,
+    subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
+    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
+  };
+
+  nodemailer.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Erro ao enviar e-mail:', error);
     } else {
-      res.render('admin', { chamados: rows });
+      console.log('E-mail enviado:', info.response);
     }
   });
+
+  res.redirect('/');
 });
 
-// Iniciar o servidor
+// Atualizar status de um chamado
+app.post('/atualizar-status', (req, res) => {
+  const { id, status } = req.body;
+  const chamado = chamados.find(c => c.id === parseInt(id));
+  if (chamado) {
+    chamado.status = status;
+    fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+  }
+  res.redirect('/admin');
+});
+
+// Função para definir prioridade com base no assunto e sub-assunto
+function definirPrioridade(assunto, subAssunto) {
+  const regras = {
+    'Pedidos': {
+      'Integração de Pedidos': 'Alta',
+      'Dúvidas/Auxilio': 'Baixa'
+    },
+    'Produto/Anúncio': {
+      'Vinculo de produto/anúncio com erro': 'Média',
+      'Dúvidas/Auxilio': 'Baixa'
+    }
+  };
+
+  return (regras[assunto] && regras[assunto][subAssunto]) || 'Média';
+}
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
