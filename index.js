@@ -51,19 +51,17 @@ carregarDB();
 // Middleware para verificar se está logado
 function verificarLogin(req, res, next) {
   if (req.session.usuario) {
-    next();
-  } else {
-    res.redirect('/login');
+    return next();
   }
+  res.redirect('/login');
 }
 
 // Middleware para verificar se é admin
 function verificarAdmin(req, res, next) {
   if (req.session.usuario && req.session.usuario.admin) {
-    next();
-  } else {
-    res.status(403).send('Acesso negado');
+    return next();
   }
+  res.status(403).send('Acesso negado');
 }
 
 // Função para formatar data no padrão brasileiro com hora de Brasília
@@ -87,6 +85,10 @@ app.get('/login', (req, res) => {
 // Processar login
 app.post('/login', (req, res) => {
   const { email, senha } = req.body;
+
+  // Recarrega o DB a cada login para garantir atualização dos dados
+  carregarDB();
+
   const usuario = db.usuarios.find(u => u.email === email);
 
   if (!usuario) {
@@ -98,13 +100,18 @@ app.post('/login', (req, res) => {
   }
 
   // Login bem sucedido
-  req.session.usuario = { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.admin };
+  req.session.usuario = {
+    id: usuario.id,
+    nome: usuario.nome,
+    email: usuario.email,
+    admin: usuario.admin
+  };
 
   // Redirecionar para admin se for admin, ou para meus chamados se usuário comum
   if (usuario.admin) {
-    res.redirect('/admin');
+    return res.redirect('/admin');
   } else {
-    res.redirect('/meus-chamados');
+    return res.redirect('/meus-chamados');
   }
 });
 
@@ -117,12 +124,14 @@ app.get('/logout', (req, res) => {
 
 // Tela para cadastro de novos usuários (somente admin)
 app.get('/usuarios', verificarLogin, verificarAdmin, (req, res) => {
+  carregarDB();
   res.render('usuarios', { usuarios: db.usuarios, erro: null, sucesso: null });
 });
 
 // Processar cadastro de usuário novo (somente admin)
 app.post('/usuarios', verificarLogin, verificarAdmin, (req, res) => {
   const { nome, email, senha, admin } = req.body;
+  carregarDB();
 
   if (!nome || !email || !senha) {
     return res.render('usuarios', { usuarios: db.usuarios, erro: 'Todos os campos são obrigatórios.', sucesso: null });
@@ -133,7 +142,7 @@ app.post('/usuarios', verificarLogin, verificarAdmin, (req, res) => {
   }
 
   const novoUsuario = {
-    id: db.usuarios.length + 1,
+    id: db.usuarios.length ? Math.max(...db.usuarios.map(u => u.id)) + 1 : 1,
     nome,
     email,
     senha: bcrypt.hashSync(senha, 10),
@@ -162,7 +171,7 @@ app.post('/criar-chamado', verificarLogin, (req, res) => {
   const prioridade = definirPrioridade(assunto, subAssunto);
 
   const novoChamado = {
-    id: db.chamados.length + 1,
+    id: db.chamados.length ? Math.max(...db.chamados.map(c => c.id)) + 1 : 1,
     nome,
     email,
     assunto,
@@ -211,6 +220,7 @@ app.get('/admin', verificarLogin, verificarAdmin, (req, res) => {
 app.post('/atualizar-status', verificarLogin, verificarAdmin, (req, res) => {
   const { id, status, descricaoAtualizacao } = req.body;
   const chamado = db.chamados.find(c => c.id === parseInt(id));
+
   if (chamado) {
     chamado.status = status;
     chamado.historico.push({
