@@ -3,6 +3,8 @@ const bodyParser = require('body-parser');
 const basicAuth = require('express-basic-auth');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { sendStatusUpdateEmail } = require('./mailer'); // Importa a função de envio de email
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -56,12 +58,31 @@ app.get('/admin', (req, res) => {
   });
 });
 
-// Atualizar status
+// Atualizar status com envio de e-mail
 app.post('/admin/update/:id', (req, res) => {
   const { status } = req.body;
   const { id } = req.params;
-  db.run(`UPDATE tickets SET status = ? WHERE id = ?`, [status, id], err => {
-    res.redirect('/admin');
+  db.run(`UPDATE tickets SET status = ? WHERE id = ?`, [status, id], function(err) {
+    if (err) {
+      console.error(err);
+      return res.send('Erro ao atualizar status');
+    }
+
+    // Busca o email do ticket atualizado
+    db.get(`SELECT email FROM tickets WHERE id = ?`, [id], async (err, row) => {
+      if (err || !row) {
+        console.error(err);
+        return res.send('Erro ao buscar email do ticket');
+      }
+
+      try {
+        await sendStatusUpdateEmail(row.email, id, status);
+        res.redirect('/admin');
+      } catch (error) {
+        console.error('Erro ao enviar email:', error);
+        res.send('Erro ao enviar email de notificação');
+      }
+    });
   });
 });
 
