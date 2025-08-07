@@ -25,10 +25,16 @@ function formatarDataBR(data) {
   });
 }
 
-// Carregar chamados existentes
+// Carregar chamados existentes com tratamento de erro
 let chamados = [];
 if (fs.existsSync(chamadosFile)) {
-  chamados = JSON.parse(fs.readFileSync(chamadosFile));
+  try {
+    const data = fs.readFileSync(chamadosFile, 'utf8');
+    chamados = data ? JSON.parse(data) : [];
+  } catch (err) {
+    console.error('Erro ao ler arquivo chamados.json:', err);
+    chamados = [];
+  }
 }
 
 // Página inicial (formulário)
@@ -70,7 +76,13 @@ app.post('/criar-chamado', (req, res) => {
   };
 
   chamados.push(novoChamado);
-  fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+
+  try {
+    fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+  } catch (err) {
+    console.error('Erro ao salvar arquivo chamados.json:', err);
+    return res.status(500).send('Erro interno ao salvar chamado.');
+  }
 
   // Enviar e-mail de confirmação
   const mailOptions = {
@@ -103,7 +115,12 @@ app.post('/atualizar-status', (req, res) => {
       descricao: descricaoAtualizacao?.trim() || ''
     });
 
-    fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+    try {
+      fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+    } catch (err) {
+      console.error('Erro ao salvar arquivo chamados.json:', err);
+      return res.status(500).send('Erro interno ao salvar atualização.');
+    }
 
     nodemailer.sendStatusUpdateEmail(
       chamado.email,
