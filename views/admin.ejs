@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin - Chamados</title>
+  <meta charset="utf-8">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-4">
+  <h2>Painel de Chamados</h2>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>ID</th><th>Nome</th><th>Email</th><th>Assunto</th><th>Descrição</th><th>Prioridade</th><th>Status</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% tickets.forEach(ticket => { %>
+        <tr>
+          <td><%= ticket.id %></td>
+          <td><%= ticket.nome %></td>
+          <td><%= ticket.email %></td>
+          <td><%= ticket.assunto %></td>
+          <td><%= ticket.descricao %></td>
+          <td><%= ticket.prioridade %></td>
+          <td><%= ticket.status %></td>
+          <td>
+            <form method="POST" action="/admin/update/<%= ticket.id %>">
+              <select name="status" class="form-select form-select-sm mb-1">
+                <option <%= ticket.status === 'Novo' ? 'selected' : '' %>>Novo</option>
+                <option <%= ticket.status === 'Em andamento' ? 'selected' : '' %>>Em andamento</option>
+                <option <%= ticket.status === 'Resolvido' ? 'selected' : '' %>>Resolvido</option>
+              </select>
+              <button class="btn btn-sm btn-success">Atualizar</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</body>
+</html>
