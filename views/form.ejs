@@ -1,14 +1,21 @@
+<!-- views/form.ejs -->
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8" />
   <title>Abrir Chamado</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
+    rel="stylesheet"
+  />
   <style>
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: "Inter", sans-serif;
       background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
       min-height: 100vh;
       display: flex;
@@ -16,6 +23,7 @@
       justify-content: center;
       padding: 20px;
     }
+
     .form-wrapper {
       background-color: #ffffff;
       border-radius: 16px;
@@ -24,28 +32,36 @@
       width: 100%;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.07);
     }
+
     h2 {
       font-weight: 600;
       color: #111827;
       margin-bottom: 30px;
       text-align: center;
     }
+
     label {
       font-weight: 500;
       margin-bottom: 6px;
     }
-    .form-control, .form-select {
+
+    .form-control,
+    .form-select {
       border-radius: 10px;
       padding: 10px 14px;
       font-size: 15px;
     }
-    .form-control:focus, .form-select:focus {
+
+    .form-control:focus,
+    .form-select:focus {
       border-color: #6366f1;
       box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
     }
+
     textarea.form-control {
       resize: vertical;
     }
+
     .btn-primary {
       background-color: #6366f1;
       border: none;
@@ -55,9 +71,11 @@
       border-radius: 12px;
       transition: background-color 0.2s;
     }
+
     .btn-primary:hover {
       background-color: #4f46e5;
     }
+
     .form-group {
       margin-bottom: 20px;
     }
@@ -66,74 +84,110 @@
 <body>
   <div class="form-wrapper">
     <h2>Abrir Chamado</h2>
-    <% if (success) { %>
-      <div class="alert alert-success">Chamado criado com sucesso! Você receberá um e-mail com os detalhes.</div>
-    <% } %>
-    <form action="/criar-chamado" method="POST" id="formChamado">
-      <div class="form-group">
-        <label for="name">Nome</label>
-        <input type="text" class="form-control" id="name" name="nome" placeholder="Digite seu nome" required />
+    <div class="container">
+      <% if (success) { %>
+      <div
+        class="alert alert-success"
+        role="alert"
+        style="text-align: center; font-weight: 600"
+      >
+        Chamado criado com sucesso! Você receberá um e-mail com os detalhes.
       </div>
+      <% } %>
+      <form method="POST" action="/criar-chamado">
+        <div class="form-group">
+          <label for="name">Nome</label>
+          <input
+            type="text"
+            class="form-control"
+            id="name"
+            name="nome"
+            placeholder="Digite seu nome"
+            required
+          />
+        </div>
 
-      <div class="form-group">
-        <label for="email">E-mail</label>
-        <input type="email" class="form-control" id="email" name="email" placeholder="exemplo@empresa.com" required />
-      </div>
+        <div class="form-group">
+          <label for="email">E-mail</label>
+          <input
+            type="email"
+            class="form-control"
+            id="email"
+            name="email"
+            placeholder="exemplo@empresa.com"
+            required
+          />
+        </div>
 
-      <div class="form-group">
-        <label for="subject">Assunto</label>
-        <select class="form-select" id="subject" name="subject" required>
-          <option value="">Selecione um assunto</option>
-          <option value="Pedidos">Pedidos</option>
-          <option value="Produto/Anúncio">Produto/Anúncio</option>
-        </select>
-      </div>
+        <div class="form-group">
+          <label for="subject">Assunto</label>
+          <select class="form-select" id="subject" name="assunto" required>
+            <option value="">Selecione um assunto</option>
+            <option value="Pedidos">Pedidos</option>
+            <option value="Produto/Anúncio">Produto/Anúncio</option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label for="subSubject">Tipo de Solicitação</label>
-        <select class="form-select" id="subSubject" name="subSubject" required>
-          <option value="">Selecione um tipo</option>
-        </select>
-      </div>
+        <div class="form-group">
+          <label for="subSubject">Tipo de Solicitação</label>
+          <select class="form-select" id="subSubject" name="subAssunto" required>
+            <option value="">Selecione um tipo</option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label for="priority">Prioridade</label>
-        <input type="text" class="form-control" id="priority" name="priority" readonly placeholder="Selecionada automaticamente" />
-      </div>
+        <div class="form-group">
+          <label for="priority">Prioridade</label>
+          <input
+            type="text"
+            class="form-control"
+            id="priority"
+            name="prioridade"
+            readonly
+            placeholder="Selecionada automaticamente"
+          />
+        </div>
 
-      <div class="form-group">
-        <label for="description">Descrição</label>
-        <textarea class="form-control" id="description" name="description" rows="5" placeholder="Descreva o problema ou solicitação" required></textarea>
-      </div>
+        <div class="form-group">
+          <label for="description">Descrição</label>
+          <textarea
+            class="form-control"
+            id="description"
+            name="descricao"
+            rows="5"
+            placeholder="Descreva o problema ou solicitação"
+            required
+          ></textarea>
+        </div>
 
-      <button type="submit" class="btn btn-primary w-100">Enviar Chamado</button>
-    </form>
+        <button type="submit" class="btn btn-primary w-100">Enviar Chamado</button>
+      </form>
+    </div>
   </div>
 
   <script>
-    const subjectSelect = document.getElementById('subject');
-    const subSubjectSelect = document.getElementById('subSubject');
-    const priorityInput = document.getElementById('priority');
+    const subjectSelect = document.getElementById("subject");
+    const subSubjectSelect = document.getElementById("subSubject");
+    const priorityInput = document.getElementById("priority");
 
     const options = {
-      'Pedidos': {
-        'Integração de Pedidos': 'Alta',
-        'Dúvidas / Auxílio': 'Baixa'
+      Pedidos: {
+        "Integração de Pedidos": "Alta",
+        "Dúvidas / Auxílio": "Baixa",
       },
-      'Produto/Anúncio': {
-        'Vínculo de produto/anúncio com erro': 'Média',
-        'Dúvidas / Auxílio': 'Baixa'
-      }
+      "Produto/Anúncio": {
+        "Vínculo de produto/anúncio com erro": "Média",
+        "Dúvidas / Auxílio": "Baixa",
+      },
     };
 
-    subjectSelect.addEventListener('change', function() {
+    subjectSelect.addEventListener("change", function () {
       const subject = this.value;
       subSubjectSelect.innerHTML = '<option value="">Selecione um tipo</option>';
-      priorityInput.value = '';
+      priorityInput.value = "";
 
       if (subject && options[subject]) {
         Object.entries(options[subject]).forEach(([sub, priority]) => {
-          const opt = document.createElement('option');
+          const opt = document.createElement("option");
           opt.value = sub;
           opt.textContent = sub;
           subSubjectSelect.appendChild(opt);
@@ -141,13 +195,13 @@
       }
     });
 
-    subSubjectSelect.addEventListener('change', function() {
+    subSubjectSelect.addEventListener("change", function () {
       const subject = subjectSelect.value;
       const sub = this.value;
       if (options[subject] && options[subject][sub]) {
         priorityInput.value = options[subject][sub];
       } else {
-        priorityInput.value = '';
+        priorityInput.value = "";
       }
     });
   </script>
