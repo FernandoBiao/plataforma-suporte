@@ -1,8 +1,9 @@
+// index.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
-const { sendMail } = require('./mailer');
+const nodemailer = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -12,27 +13,21 @@ app.set('view engine', 'ejs');
 app.use(express.static('public'));
 
 const chamadosFile = path.join(__dirname, 'chamados.json');
-
-// Carregar chamados existentes
 let chamados = [];
 if (fs.existsSync(chamadosFile)) {
   chamados = JSON.parse(fs.readFileSync(chamadosFile));
 }
 
-// Página inicial (abrir chamado)
 app.get('/', (req, res) => {
-  res.render('form');
+  res.render('form', { mensagem: null });
 });
 
-// Página do admin
 app.get('/admin', (req, res) => {
   res.render('admin', { chamados });
 });
 
-// Criar novo chamado
 app.post('/criar-chamado', (req, res) => {
   const { nome, email, assunto, subAssunto, descricao } = req.body;
-
   const prioridade = definirPrioridade(assunto, subAssunto);
 
   const novoChamado = {
@@ -50,48 +45,29 @@ app.post('/criar-chamado', (req, res) => {
   chamados.push(novoChamado);
   fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
 
-  // Enviar e-mail de confirmação
   const mailOptions = {
-    from: 'fernando.sbiao@gmail.com', // seu e-mail real
+    from: 'fernando.sbiao@gmail.com',
     to: email,
     subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
-    text: `Olá ${nome},
-
-Seu chamado foi criado com sucesso.
-
-Número do Chamado: #${novoChamado.id}
-Assunto: ${assunto}
-Sub-Assunto: ${subAssunto}
-Prioridade: ${prioridade}
-
-Em breve entraremos em contato.
-
-Obrigado!`
+    text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
   };
 
-  sendMail(mailOptions)
-    .then(info => {
-      console.log('E-mail enviado:', info.response);
-    })
-    .catch(error => {
-      console.error('Erro ao enviar e-mail:', error);
-    });
+  nodemailer.sendStatusUpdateEmail(email, novoChamado.id, 'Aberto');
 
-  res.redirect('/');
+  res.render('form', { mensagem: `Chamado #${novoChamado.id} criado com sucesso!` });
 });
 
-// Atualizar status de um chamado
 app.post('/atualizar-status', (req, res) => {
   const { id, status } = req.body;
   const chamado = chamados.find(c => c.id === parseInt(id));
   if (chamado) {
     chamado.status = status;
     fs.writeFileSync(chamadosFile, JSON.stringify(chamados, null, 2));
+    nodemailer.sendStatusUpdateEmail(chamado.email, chamado.id, status);
   }
   res.redirect('/admin');
 });
 
-// Função para definir prioridade com base no assunto e sub-assunto
 function definirPrioridade(assunto, subAssunto) {
   const regras = {
     'Pedidos': {
@@ -103,7 +79,6 @@ function definirPrioridade(assunto, subAssunto) {
       'Dúvidas/Auxilio': 'Baixa'
     }
   };
-
   return (regras[assunto] && regras[assunto][subAssunto]) || 'Média';
 }
 
