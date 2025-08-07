@@ -1,4 +1,3 @@
-// index.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
@@ -68,8 +67,13 @@ app.post('/criar-chamado', (req, res) => {
     }
   });
 
-  // Redirecionar para evitar reenvio de formulário
-  res.redirect('/?success=true');
+  // Redirecionar para a página de sucesso
+  res.redirect('/sucesso');
+});
+
+// Página de sucesso
+app.get('/sucesso', (req, res) => {
+  res.render('sucesso');
 });
 
 // Atualizar status de um chamado
