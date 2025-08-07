@@ -13,6 +13,18 @@ app.use(express.static('public'));
 
 const chamadosFile = path.join(__dirname, 'chamados.json');
 
+// Função para formatar data no padrão brasileiro com hora
+function formatarDataBR(data) {
+  return data.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 // Carregar chamados existentes
 let chamados = [];
 if (fs.existsSync(chamadosFile)) {
@@ -53,7 +65,7 @@ app.post('/criar-chamado', (req, res) => {
     descricao,
     prioridade,
     status: 'Aberto',
-    dataCriacao: new Date().toLocaleString(),
+    dataCriacao: formatarDataBR(new Date()),
     historico: []
   };
 
@@ -62,7 +74,7 @@ app.post('/criar-chamado', (req, res) => {
 
   // Enviar e-mail de confirmação
   const mailOptions = {
-    from: 'fernando.sbiao@gmail.com', // seu e-mail real
+    from: 'fernando.sbiao@gmail.com',
     to: email,
     subject: `Confirmação de Abertura de Chamado #${novoChamado.id}`,
     text: `Olá ${nome},\n\nSeu chamado foi criado com sucesso.\n\nNúmero do Chamado: #${novoChamado.id}\nAssunto: ${assunto}\nSub-Assunto: ${subAssunto}\nPrioridade: ${prioridade}\n\nEm breve entraremos em contato.\n\nObrigado!`
@@ -86,7 +98,7 @@ app.post('/atualizar-status', (req, res) => {
   if (chamado) {
     chamado.status = status;
     chamado.historico.push({
-      data: new Date().toLocaleString(),
+      data: formatarDataBR(new Date()),
       status,
       descricao: descricaoAtualizacao?.trim() || ''
     });
