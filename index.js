@@ -13,9 +13,10 @@ app.use(express.static('public'));
 
 const chamadosFile = path.join(__dirname, 'chamados.json');
 
-// Função para formatar data no padrão brasileiro com hora
+// Função para formatar data no padrão brasileiro com hora no fuso de Brasília
 function formatarDataBR(data) {
   return data.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo', // corrigido para horário de Brasília
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
